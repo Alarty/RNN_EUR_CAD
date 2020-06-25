@@ -5,4 +5,4 @@
 To do list :
 * Learn the relative rate change,  day to day instead of the real 
 * Add small noise in data to have more data ?
- 
+* Add weekday for information ?
