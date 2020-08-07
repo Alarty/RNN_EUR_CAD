@@ -23,9 +23,13 @@ Paragraph under construction
 
 ###Steps : 
 - Data Gathering
+    - Web Scrapping with BeautifulSoup
 - Data Preparation
-    - Data split
     - Data normalization
+        - We change the raw exchange rate value to a delta from previous day. To avoid having to bound 
+        min/max value and to avoid other tricks of normalization. This should be enough.
+    - Data split
+        - Split should not be random because of periodicity. Split should cut the train/test on a specific date
 - Model Construction
     - Definition
     - Graph definition

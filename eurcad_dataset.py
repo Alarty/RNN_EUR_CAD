@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import torch
 
 
 class DatasetHandler:
@@ -12,8 +13,6 @@ class DatasetHandler:
         """
         # store features
         self.data = []
-        self.train = None
-        self.test = None
 
         # data input
         self.origin_url = origin_url
@@ -38,6 +37,15 @@ class DatasetHandler:
     def get_dataset(self):
         return self.data
 
+    def get_features(self, features_list):
+        """
+
+        :param features_list:
+        :return:
+        """
+        print(f"Select features : {features_list}")
+        return self.data[features_list]
+
     def get_train_test(self):
         return self.train, self.test
 
@@ -52,7 +60,7 @@ class DatasetHandler:
         self.data = self.data[date_begin <= self.data.date]
         self.data = self.data[self.data.date <= date_end]
 
-    def creat_window_features(self, winsize: int):
+    def create_sequence(self, winsize: int):
         """
         add features for each element : the N previous values
         :param winsize: the size of the "memory" or sliding window. The number of precedent n features to guess the next
@@ -66,23 +74,24 @@ class DatasetHandler:
         # remove the n first occurences because there is some zeros that are artificials
         self.data = self.data[winsize:]
 
-    def train_test_split(self, train_size: float):
+    @staticmethod
+    def train_test_split(train_size: float, data: list):
         """
         split the dataset to usable data to train the model.
+        :param data: self.data if None, otherwise can contain any dataframe or
         :param train_size: the split of the dataset in percentage or int for train
         """
         if type(train_size) == int:
             split_point = train_size
         elif type(train_size) == float:
-            split_point = int(len(self.data) * train_size)
+            split_point = int(len(data) * train_size)
         else:
             raise TypeError("train_size must be int or float")
 
-        self.train = self.data[:split_point]
-        self.test = self.data[split_point:]
+        train = data[:split_point]
+        test = data[split_point:]
 
-        self.train = self.train.drop(['date', 'eur_cad_rate'], axis=1)
-        self.test = self.test.drop(['date', 'eur_cad_rate'], axis=1)
+        return train, test
 
     def data_augment(self, times: int, noise_lvl: float):
         """
@@ -118,10 +127,36 @@ class DatasetHandler:
         raise NotImplementedError
 
     @staticmethod
-    def to_daily_var(data: object):
+    def to_daily_var(data):
         """
         Difference between rate of yesterday and today. First value is 0 because we don't know
         :param data: the input pd serie
         :return: a new pd serie containing only the difference
         """
         return pd.Series([0] + [data[i] - data[i - 1] for i in range(1, len(data))])
+
+    @staticmethod
+    def to_tensor(features, target=None):
+        """
+
+        :param features:
+        :param target:
+        :return:
+        """
+        if target is not None:
+            # Select the in and target features
+            out_features = features[target].values.reshape(-1, 1)
+            in_features = features.loc[:, features.columns != target].values
+
+            # reshape to have N samples of an array of features
+            in_features = in_features.reshape(len(in_features), 1, -1)
+
+            in_features = torch.FloatTensor(in_features)
+            out_features = torch.FloatTensor(out_features)
+            # concatenate to have N samples of an array of features, an array of output
+            tensor = [[in_features[i], out_features[i]] for i in range(0, len(in_features))]
+
+            return tensor
+        else:
+            return torch.FloatTensor(features)
+
