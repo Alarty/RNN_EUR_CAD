@@ -14,5 +14,6 @@ features = dataset.get_features(features_str)
 features = dataset.to_tensor(features, target="daily_change")
 train_data, test_data = dataset.train_test_split(0.8, features)
 
-trainer.train(train_data)
+trainer = trainer.Trainer()
+trainer.train(train_data, test_data)
 print("End")

@@ -6,83 +6,137 @@ import torch.nn as nn
 import eurcad_model as models
 
 
-def train(train_loader, learn_rate=0.00005, hidden_dim=256, hidden_nb=1, epochs=200, model_type="GRU"):
-    # Setting hyperparameters
-    input_dim = train_loader[0][0].shape[1]
-    output_dim = 1
-    batch_size = 128
-    training_generator = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle=True, drop_last=True)
-    # Instantiating the models
-    if model_type == "GRU":
-        model = models.GruModel(input_size=input_dim, hidden_layer_nb=hidden_nb, hidden_layer_size=hidden_dim, output_size=output_dim)
-    else:
-        model = models.LstmModel(input_size=input_dim, hidden_layer_nb=hidden_nb, hidden_layer_size=hidden_dim, output_size=output_dim)
-    model.to(model.device)
+class Trainer:
 
-    # Choose loss, optimizer and metric
-    loss_function = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
+    def __init__(self, learn_rate=0.00005, hidden_dim=256, hidden_nb=1, epochs=200, model_type="GRU"):
 
-    # set module state (for some objects it is needed)
-    model.train()
-    print(f"Training of {model_type}, batches of {batch_size} started...")
-    epoch_times = []
-    # Start training loop
-    for epoch in range(1, epochs + 1):
-        start_time = time.clock()
-        # Reset the hidden states to zero
-        hidden = model.init_hidden(batch_size)
+        self.learn_rate = learn_rate
+        self.hidden_dim = hidden_dim
+        self.hidden_nb = hidden_nb
+        self.epochs = epochs
+        self.model_type = model_type
+        self.model = None
+        self.input_dim = None
+        self.output_dim = None
+        self.batch_size = None
+        self.optimizer = None
+        self.loss_function = None
 
-        # metrics
-        avg_loss = 0.
-        counter = 0
+        is_cuda = torch.cuda.is_available()
+        if is_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
 
-        for x, label in training_generator:
-            counter += 1
-            if model_type == "GRU":
-                hidden = hidden.data
+    def train(self, train_set, test_set=None):
+        # Setting hyperparameters
+        self.input_dim = train_set[0][0].shape[1]
+        self.output_dim = 1
+        self.batch_size = 128
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True,
+                                                   drop_last=True)
+        if test_set is not None:
+            test_loader = torch.utils.data.DataLoader(test_set, batch_size=1)
+        # Instantiating the models
+        if self.model_type == "GRU":
+            self.model = models.GruModel(self.device, input_size=self.input_dim, hidden_layer_nb=self.hidden_nb,
+                                         hidden_layer_size=self.hidden_dim, output_size=self.output_dim)
+        else:
+            self.model = models.LstmModel(self.device, input_size=self.input_dim, hidden_layer_nb=self.hidden_nb,
+                                          hidden_layer_size=self.hidden_dim, output_size=self.output_dim)
+        self.model.to(self.device)
+
+        # Choose loss, optimizer and metric
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
+        self.loss_function = nn.MSELoss()
+
+        # Notify network layers behaviour we are in test mode (batchnorm, dropout...)
+        self.model.train()
+        print(f"Training of {self.model_type}, batches of {self.batch_size} started...")
+        epoch_times = []
+        # Start training loop
+        for epoch in range(1, self.epochs + 1):
+            start_time = time.clock()
+            # Reset the hidden states to zero
+            hidden = self.model.init_hidden(self.batch_size)
+
+            # metrics
+            avg_loss = 0.
+            avg_test_loss = 0.
+            counter = 0
+
+            for x, label in train_loader:
+                counter += 1
+                if self.model_type == "GRU":
+                    hidden = hidden.data
+                else:
+                    hidden = tuple([e.data for e in hidden])
+
+                # set all gradients to zero because Pytorch accumulates gradients
+                self.model.zero_grad()
+
+                # forward pass
+                out, hidden = self.model(x, hidden)
+
+                # Compute the loss, gradients, and update the parameters by calling optimizer.step()
+                loss = self.loss_function(out, label)
+                loss.backward()
+                self.optimizer.step()
+
+                avg_loss += loss.item()
+                if test_set is not None:
+                    test_loss = self.validate(test_loader)
+                    avg_test_loss += test_loss
+                if counter % 100 == 0:
+                    if test_set is not None:
+                        print(f"Epoch {epoch}......Step: {counter}/{len(train_loader)}....... Avg Loss for Epoch: {avg_loss / counter}... Avg Test Loss: {avg_test_loss / counter}")
+                    else:
+                        print(f"Epoch {epoch}......Step: {counter}/{len(train_loader)}....... Avg Loss for Epoch: {avg_loss / counter}")
+
+                    # TODO evaluation each time to have the validation loss evolving
+            current_time = time.clock()
+            if test_set is not None:
+                print(f"Epoch {epoch}/{self.epochs} Done, Total Train Loss: {avg_loss / len(train_loader)}, Total Test Loss: {avg_test_loss / len(train_loader)}")
             else:
-                hidden = tuple([e.data for e in hidden])
+                print(f"Epoch {epoch}/{self.epochs} Done, Total Train Loss: {avg_loss / len(train_loader)}")
+            epoch_times.append(current_time - start_time)
+        print("Total Training Time: {} seconds".format(str(sum(epoch_times))))
+        return self.model
 
-            # set all gradients to zero because Pytorch accumulates gradients
-            model.zero_grad()
+    def validate(self, test_loader):
+        # say to pytorch not to do the backpropagation
+        with torch.no_grad():
+            total_loss = 0
+            self.model.eval()
+            # calculate validation loss
+            for i, data in enumerate(test_loader):
+                X, y = data[0], data[1]
+                y_pred = self.model(X, self.model.init_hidden(1))[0]
+                test_loss = self.loss_function(y_pred, y)
+                total_loss += test_loss.item()
 
-            # forward pass
-            out, hidden = model(x, hidden)
+            total_loss /= len(test_loader)
 
-            # Compute the loss, gradients, and update the parameters by calling optimizer.step()
-            loss = loss_function(out, label)
-            loss.backward()
-            optimizer.step()
-
-            avg_loss += loss.item()
-            if counter % 200 == 0:
-                print("Epoch {}......Step: {}/{}....... Average Loss for Epoch: {}".format(epoch, counter,
-                                                                                           len(train_loader),
-                                                                                           avg_loss / counter))
-                # TODO evaluation each time to have the validation loss evolving
-        current_time = time.clock()
-        print("Epoch {}/{} Done, Total Loss: {}".format(epoch, epochs, avg_loss / len(train_loader)))
-        epoch_times.append(current_time - start_time)
-    print("Total Training Time: {} seconds".format(str(sum(epoch_times))))
-    return model
+            # go back in train mode for the model
+            self.model.train()
+            return total_loss
 
 
-def evaluate(model, test_x, test_y, label_scalers):
-    model.eval()
-    outputs = []
-    targets = []
-    start_time = time.clock()
-    for i in test_x.keys():
-        inp = torch.from_numpy(np.array(test_x[i]))
-        labs = torch.from_numpy(np.array(test_y[i]))
-        h = model.init_hidden(inp.shape[0])
-        out, h = model(inp.to(model.device).float(), h)
-        outputs.append(label_scalers[i].inverse_transform(out.cpu().detach().numpy()).reshape(-1))
-        targets.append(label_scalers[i].inverse_transform(labs.numpy()).reshape(-1))
-    print("Evaluation Time: {}".format(str(time.clock() - start_time)))
-    sMAPE = 0
-    for i in range(len(outputs)):
-        sMAPE += np.mean(abs(outputs[i] - targets[i]) / (targets[i] + outputs[i]) / 2) / len(outputs)
-    print("sMAPE: {}%".format(sMAPE * 100))
-    return outputs, targets, sMAPE
+    def evaluate(self, model, test_x, test_y, label_scalers):
+        model.eval()
+        outputs = []
+        targets = []
+        start_time = time.clock()
+        for i in test_x.keys():
+            inp = torch.from_numpy(np.array(test_x[i]))
+            labs = torch.from_numpy(np.array(test_y[i]))
+            h = model.init_hidden(inp.shape[0])
+            out, h = model(inp.to(self.device).float(), h)
+            outputs.append(label_scalers[i].inverse_transform(out.cpu().detach().numpy()).reshape(-1))
+            targets.append(label_scalers[i].inverse_transform(labs.numpy()).reshape(-1))
+        print("Evaluation Time: {}".format(str(time.clock() - start_time)))
+        sMAPE = 0
+        for i in range(len(outputs)):
+            sMAPE += np.mean(abs(outputs[i] - targets[i]) / (targets[i] + outputs[i]) / 2) / len(outputs)
+        print("sMAPE: {}%".format(sMAPE * 100))
+        return outputs, targets, sMAPE

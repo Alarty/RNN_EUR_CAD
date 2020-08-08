@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class RnnModel(nn.Module):
-    def __init__(self, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2, load=None):
+    def __init__(self, device, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2, load=None):
         """
         Init of the Model instance
         :param input_size: Number of features for the input for 1 time moment
@@ -13,25 +13,19 @@ class RnnModel(nn.Module):
         :param load: If this is a new model to train : leave empty. If this is a old model to load, path of the pkl file
         """
         super(RnnModel, self).__init__()
-
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.device = torch.device("cuda")
-        else:
-            self.device = torch.device("cpu")
-
         self.hidden_layer_size = hidden_layer_size
         self.hidden_layer_nb = hidden_layer_nb
         self.input_size = input_size
         self.output_size = output_size
         self.drop_prob = drop_prob
+        self.device = device
 
         # TODO : reload a pkl model file
 
 
 class GruModel(RnnModel):
-    def __init__(self, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2):
-        super(GruModel, self).__init__(input_size, hidden_layer_nb, hidden_layer_size, output_size, drop_prob)
+    def __init__(self, device, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2):
+        super(GruModel, self).__init__(device, input_size, hidden_layer_nb, hidden_layer_size, output_size, drop_prob)
         self.gru = nn.GRU(input_size, hidden_layer_size, hidden_layer_nb, batch_first=True, dropout=drop_prob)
         self.fc = nn.Linear(hidden_layer_size, output_size)
         self.relu = nn.ReLU()
@@ -48,8 +42,8 @@ class GruModel(RnnModel):
 
 
 class LstmModel(RnnModel):
-    def __init__(self, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2):
-        super(LstmModel, self).__init__(input_size, hidden_layer_nb, hidden_layer_size, output_size, drop_prob)
+    def __init__(self, device, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2):
+        super(LstmModel, self).__init__(device, input_size, hidden_layer_nb, hidden_layer_size, output_size, drop_prob)
         self.hidden_dim = hidden_layer_size
         self.n_layers = hidden_layer_nb
 
