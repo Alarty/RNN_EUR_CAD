@@ -36,7 +36,7 @@ class Trainer:
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True,
                                                    drop_last=True)
         if test_set is not None:
-            test_loader = torch.utils.data.DataLoader(test_set, batch_size=1)
+            test_loader = torch.utils.data.DataLoader(test_set, batch_size=len(test_set))
         # Instantiating the models
         if self.model_type == "GRU":
             self.model = models.GruModel(self.device, input_size=self.input_dim, hidden_layer_nb=self.hidden_nb,
@@ -49,6 +49,9 @@ class Trainer:
         # Choose loss, optimizer and metric
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
         self.loss_function = nn.MSELoss()
+
+        train_labels = [x.detach().numpy()[0] for x in list(list(zip(*train_set))[1])]
+        test_labels = [x.detach().numpy()[0] for x in list(list(zip(*test_set))[1])]
 
         # Notify network layers behaviour we are in test mode (batchnorm, dropout...)
         self.model.train()
@@ -64,7 +67,8 @@ class Trainer:
             avg_loss = 0.
             avg_test_loss = 0.
             counter = 0
-
+            train_preds = []
+            test_preds = []
             for x, label in train_loader:
                 counter += 1
                 if self.model_type == "GRU":
@@ -77,28 +81,33 @@ class Trainer:
 
                 # forward pass
                 out, hidden = self.model(x, hidden)
-
+                train_preds.append(out.detach().numpy().flatten())
                 # Compute the loss, gradients, and update the parameters by calling optimizer.step()
                 loss = self.loss_function(out, label)
                 loss.backward()
                 self.optimizer.step()
 
+                # compute metric
+                batch_smape_train = self.get_smape(label.detach().numpy(), out.detach().numpy())
+
                 avg_loss += loss.item()
                 if test_set is not None:
-                    test_loss = self.validate(test_loader)
+                    test_preds, test_loss, batch_smape_test = self.validate(test_loader)
+
                     avg_test_loss += test_loss
                 if counter % 100 == 0:
+                    print(f"Epoch {epoch}......Step: {counter}/{len(train_loader)}....... Avg Loss for Epoch: {avg_loss / counter}... SMAPE for Epoch: {batch_smape_train}")
                     if test_set is not None:
-                        print(f"Epoch {epoch}......Step: {counter}/{len(train_loader)}....... Avg Loss for Epoch: {avg_loss / counter}... Avg Test Loss: {avg_test_loss / counter}")
-                    else:
-                        print(f"Epoch {epoch}......Step: {counter}/{len(train_loader)}....... Avg Loss for Epoch: {avg_loss / counter}")
+                        print(f"Test : Avg Loss for Epoch: {avg_test_loss / counter}... SMAPE for Epoch: {batch_smape_test}")
 
                     # TODO evaluation each time to have the validation loss evolving
             current_time = time.clock()
+
+            epoch_smape_train = self.get_smape(train_preds, train_labels)
+            epoch_smape_test = self.get_smape(test_preds, test_labels)
+            print(f"Epoch {epoch}/{self.epochs} Done, Total Train Loss: {avg_loss / len(train_loader)}, Epoch Train sMAPE: {epoch_smape_train}")
             if test_set is not None:
-                print(f"Epoch {epoch}/{self.epochs} Done, Total Train Loss: {avg_loss / len(train_loader)}, Total Test Loss: {avg_test_loss / len(train_loader)}")
-            else:
-                print(f"Epoch {epoch}/{self.epochs} Done, Total Train Loss: {avg_loss / len(train_loader)}")
+                print(f"Total Test Loss: {avg_test_loss / len(test_loader)}, Epoch Test sMAPE: {epoch_smape_test}")
             epoch_times.append(current_time - start_time)
         print("Total Training Time: {} seconds".format(str(sum(epoch_times))))
         return self.model
@@ -109,34 +118,27 @@ class Trainer:
             total_loss = 0
             self.model.eval()
             # calculate validation loss
+            y_preds = []
+            ys = []
             for i, data in enumerate(test_loader):
                 X, y = data[0], data[1]
-                y_pred = self.model(X, self.model.init_hidden(1))[0]
+                y_pred = self.model(X, self.model.init_hidden(len(X)))[0]
                 test_loss = self.loss_function(y_pred, y)
                 total_loss += test_loss.item()
+                ys.append(y.numpy().flatten())
+                y_preds.append(y_pred.detach().numpy().flatten())
 
+            sMAPE = self.get_smape(y_preds, ys)
             total_loss /= len(test_loader)
-
             # go back in train mode for the model
             self.model.train()
-            return total_loss
+            return y_preds, total_loss, sMAPE
 
-
-    def evaluate(self, model, test_x, test_y, label_scalers):
-        model.eval()
-        outputs = []
-        targets = []
-        start_time = time.clock()
-        for i in test_x.keys():
-            inp = torch.from_numpy(np.array(test_x[i]))
-            labs = torch.from_numpy(np.array(test_y[i]))
-            h = model.init_hidden(inp.shape[0])
-            out, h = model(inp.to(self.device).float(), h)
-            outputs.append(label_scalers[i].inverse_transform(out.cpu().detach().numpy()).reshape(-1))
-            targets.append(label_scalers[i].inverse_transform(labs.numpy()).reshape(-1))
-        print("Evaluation Time: {}".format(str(time.clock() - start_time)))
+        
+    @staticmethod
+    def get_smape(pred, truth):
         sMAPE = 0
-        for i in range(len(outputs)):
-            sMAPE += np.mean(abs(outputs[i] - targets[i]) / (targets[i] + outputs[i]) / 2) / len(outputs)
-        print("sMAPE: {}%".format(sMAPE * 100))
-        return outputs, targets, sMAPE
+        for i in range(len(pred)):
+            sMAPE += np.mean(abs(pred[i] - truth[i]) / (truth[i] + pred[i]) / 2) / len(pred)
+
+        return sMAPE
