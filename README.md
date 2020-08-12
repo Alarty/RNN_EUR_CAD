@@ -23,7 +23,7 @@ Paragraph under construction
 
 ###Steps : 
 - Data Gathering
-    - Web Scrapping with BeautifulSoup
+    - Web Scrapping with BeautifulSoup or a CSV file
 - Data Preparation
     - Data normalization
         - We change the raw exchange rate value to a delta from previous day. To avoid having to bound 
@@ -32,12 +32,25 @@ Paragraph under construction
         - Split should not be random because of periodicity. Split should cut the train/test on a specific date
 - Model Construction
     - Definition
-    - Graph definition
+        - Try GRU, LSTM and ARIMA to compare these models and learn the pros/cons
+    - Parameters
+        - Use Adam optimizer and MSE loss
+        - 1 hidden layer of 256 neurons to start, may evolve
+        - Learning rate to tweak according to loss curves
 - Model Train
     - Evaluation and boards
+        - Tensorboard setup to monitor training and results
     - Gather results
 
-
-To do list :
-* Add other date info for information (holiday, christmas, or even raw day/month) ?
+### To do list (sorted by priority) :
+* Try different starting time
 * Try a longer full LSTM sequence ? (not only the N last to guess the next)
+* Create bunch of viz un tensorboard for data viz + model results viz and compare
+* Tweak model parameters
+* Save and reload models to gain time
+* Add other date info for information (holiday, christmas, or even raw day/month) ?
+* Try ARIMA
+* Web Scrapping input 
+
+### Launch Tensorboard on Windows
+>.\venv\Scripts\python.exe .\venv\Lib\site-packages\tensorboard\main.py --logdir=runs

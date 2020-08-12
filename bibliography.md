@@ -13,38 +13,38 @@
     - More controllable
     - Best results if fine tune  
 
-## LSTM best explaination : https://colah.github.io/posts/2015-08-Understanding-LSTMs/
+### LSTM best explaination : https://colah.github.io/posts/2015-08-Understanding-LSTMs/
+### https://lilianweng.github.io/lil-log/2017/07/08/predict-stock-prices-using-RNN-part-1.html#define-graph        
+### Good LSTM Pytorch setup article : https://stackabuse.com/time-series-prediction-using-lstm-with-pytorch-in-python/
+### GRU vs LSTM with Pytorch : https://blog.floydhub.com/gru-with-pytorch/
 
-##https://lilianweng.github.io/lil-log/2017/07/08/predict-stock-prices-using-RNN-part-1.html#define-graph
-
-LSTM Definitions : 
-
-    lstm_size: number of units in one LSTM layer.
-    num_layers: number of stacked LSTM layers.
-    keep_prob: percentage of cell units to keep in the dropout operation.
-    init_learning_rate: the learning rate to start with.
-    learning_rate_decay: decay ratio in later training epochs.
-    init_epoch: number of epochs using the constant init_learning_rate.
-    max_epoch: total number of epochs in training
-    input_size: size of the sliding window / one training data point
-    batch_size: number of data points to use in one mini-batch.
-
-The LSTM model has num_layers stacked LSTM layer(s) and each layer contains lstm_size number of LSTM cells. Then a dropout mask with keep probability keep_prob is applied to the output of every LSTM cell. The goal of dropout is to remove the potential strong dependency on one dimension so as to prevent overfitting.
-
-The training requires max_epoch epochs in total; an epoch is a single full pass of all the training data points. In one epoch, the training data points are split into mini-batches of size batch_size. We send one mini-batch to the model for one BPTT learning. The learning rate is set to init_learning_rate during the first init_epoch epochs and then decay by × learning_rate_decay during every succeeding epoch.
-
-Configuration is wrapped in one object for easy tracking and passing.
-
-        input_size=1
-        num_steps=30
-        lstm_size=128
-        num_layers=1
-        keep_prob=0.8
-        batch_size = 64
-        init_learning_rate = 0.001
-        learning_rate_decay = 0.99
-        init_epoch = 5
-        max_epoch = 50
-        
-## Good LSTM Pytorch setup article : https://stackabuse.com/time-series-prediction-using-lstm-with-pytorch-in-python/
-## GRU vs LSTM with Pytorch : https://blog.floydhub.com/gru-with-pytorch/
+## Loss choice :
+- MAE : 
+    - Useful when measuring prediction errors in the same unit as the original series
+    - Quite robust to ourliers
+    - Tell you how big of an error can you expect from the forecast on average
+    - Easy to interpret
+    - If the data is homogeneous, use this error measure to compare between different models.
+    - MAE is not unique and hence might seem to show schizophrenic behaviour ?
+- MedAE :
+    - Like MAE
+    - Also allow missing values
+    - Good to trim extreme values
+    - Reduce bias
+- **MSE** : 
+    - Average of the square of the forecast error
+    - The effect is that larger errors have more weight on the score
+    - Most used to evaluate and find model
+    - Hard to use the raw value
+    - Outliers will have a huge effect on the resulting error
+- **RMSE** : 
+    - Root of MSE before dividing it with sample size
+- MAPE : 
+    - Gives a good idea of the relative error
+    - When the forecast series can have small denominators (chance of divise by 0)
+    - Heavy penalty on negative errors where y<yhat (Not suitable in our case !!!)
+    - Tend to select a method whose forecasts are too low
+- sMAPE :
+    - Symmetric MAPE
+    - Has both a lower bound and an upper bound
+    - Not symmetric between under and over forecasting (Bad for our case)

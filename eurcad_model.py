@@ -20,9 +20,6 @@ class RnnModel(nn.Module):
         self.drop_prob = drop_prob
         self.device = device
 
-        # TODO : reload a pkl model file
-
-
 class GruModel(RnnModel):
     def __init__(self, device, input_size=1, hidden_layer_nb=1, hidden_layer_size=100, output_size=1, drop_prob=0.2):
         super(GruModel, self).__init__(device, input_size, hidden_layer_nb, hidden_layer_size, output_size, drop_prob)
@@ -64,7 +61,6 @@ class LstmModel(RnnModel):
 
 
 class Arima:
-    # TODO code arima class
     def __init__(self):
         pass
 
