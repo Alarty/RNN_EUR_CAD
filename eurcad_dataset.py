@@ -1,3 +1,7 @@
+import requests
+import os.path
+import datetime
+
 import pandas as pd
 import numpy as np
 import torch
@@ -5,17 +9,15 @@ import torch
 
 class DatasetHandler:
 
-    def __init__(self, origin_url: str = None, filename: str = None):
+    def __init__(self, filename: str = None, target_value="Close"):
         """
         init dataset Handler : Load data from url or file, and do the firsts transformations (to daily variance and round)
-        :param origin_url: the web URL that contains the data
-        :param filename: the filename that contains the data
+        :param filename: the filename that contains the data (if not, data are retrieved automatically online
+        :param target_value: the value that we want to guess
         """
         # store features
         self.data = []
 
-        # data input
-        self.origin_url = origin_url
         self.filename = filename
 
         # parameters of the data
@@ -24,12 +26,11 @@ class DatasetHandler:
 
         if self.filename:
             self.data = self.load_csv(self.filename)
-        elif self.origin_url:
-            self.data = self.load_webscrap(self.origin_url)
         else:
-            raise AttributeError("A filename or a url must be provided to retrieve data")
-
-        self.data['daily_change'] = self.to_daily_var(self.data.eur_cad_rate)
+            self.data = self.load_online()
+        self.data = self.data.dropna()
+        self.data = self.data.reset_index(drop=True)
+        self.data['daily_change'] = self.to_daily_var(self.data[target_value])
         self.add_weekday()
         # round precision of daily change and eur_cad_rate
         self.data.round(self.round_floats)
@@ -38,16 +39,8 @@ class DatasetHandler:
         return self.data
 
     def get_features(self, features_list):
-        """
-
-        :param features_list:
-        :return:
-        """
         print(f"Select features : {features_list}")
         return self.data[features_list]
-
-    def get_train_test(self):
-        return self.train, self.test
 
     def trunc_period(self, date_begin: str, date_end: str):
         """
@@ -57,8 +50,8 @@ class DatasetHandler:
         """
         date_begin = pd.to_datetime(date_begin, format="%d-%m-%Y")
         date_end = pd.to_datetime(date_end, format="%d-%m-%Y")
-        self.data = self.data[date_begin <= self.data.date]
-        self.data = self.data[self.data.date <= date_end]
+        self.data = self.data[date_begin <= self.data.Date]
+        self.data = self.data[self.data.Date <= date_end]
 
     def create_sequence(self, winsize: int):
         """
@@ -110,21 +103,29 @@ class DatasetHandler:
         self.data.round(self.round_floats)
 
     def add_weekday(self):
-        self.data['weekday'] = self.data.date.dt.dayofweek
+        self.data['weekday'] = self.data.Date.dt.dayofweek
 
 
 
     @staticmethod
     def load_csv(filename: str):
         df = pd.read_csv(filename)
-        df.date = pd.to_datetime(df.date, format="%d-%m-%Y")
+        df.Date = pd.to_datetime(df.Date, format="%Y-%m-%d")
+        # These 2 metrics are for stocks, not relevant for currencies
+        df = df.drop(columns=["Volume", "Adj Close"])
         return df
 
     @staticmethod
-    def load_webscrap(url: str):
-        # https://www.ofx.com/en-au/forex-news/historical-exchange-rates/
-        # https://finance.yahoo.com/quote/EURCAD%3DX/history?p=EURCAD%3DX
-        raise NotImplementedError
+    def load_online():
+        # the yahoo url of the "download" data button, extending start/end period to be sure to capture everything
+        url = "https://query1.finance.yahoo.com/v7/finance/download/EURCAD=X?period1=0&period2=9999999999999&interval=1d&events=history"
+
+        today_date = datetime.datetime.today().strftime("%d-%m-%Y")
+        filename = f"data/eur_cad_{today_date}.csv"
+        if not os.path.isfile(filename):
+            r = requests.get(url, allow_redirects=True)
+            open(filename, 'wb').write(r.content)
+        return DatasetHandler.load_csv(filename)
 
     @staticmethod
     def to_daily_var(data):

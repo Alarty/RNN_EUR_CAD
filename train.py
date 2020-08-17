@@ -17,7 +17,7 @@ model_type = "GRU"
 
 
 # data gathering
-dataset = ds.DatasetHandler(filename="data/eur_cad_1999-2020-daily-closing.csv")
+dataset = ds.DatasetHandler()
 dataset.trunc_period(data_start_date, data_end_date)
 dataset.create_sequence(sequence_size)
 
@@ -28,8 +28,9 @@ features = dataset.to_tensor(features, target="daily_change")
 train_data, test_data = dataset.train_test_split(0.8, features)
 
 # training of the model
-
 trainer = trainer.Trainer(model_type=model_type, model_params=model_params, logdir=f"{model_type}_data_end_date_{data_end_date}")
+trainer.writer.add_text(trainer.model_type, f"Database start : {data_start_date}")
+trainer.writer.add_text(trainer.model_type, f"Database end : {data_end_date}")
 trainer.train(train_data)
 
 # evaluation of the model

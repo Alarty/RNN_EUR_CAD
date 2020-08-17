@@ -31,21 +31,25 @@ class Trainer:
         else:
             self.device = torch.device("cpu")
 
+        # create Tensorboard run and write the parameters of the run
         self.writer = SummaryWriter(f'runs/{logdir}')
-        writer_tag = "date"
         self.writer.add_text(self.model_type, f"Learning Rate : {self.learn_rate}")
         self.writer.add_text(self.model_type, f"Size of Hidden layer : {self.hidden_dim}")
         self.writer.add_text(self.model_type, f"Nb of Hidden layer : {self.hidden_nb}")
-        self.writer.add_text(writer_tag, f"Nb of epochs : {self.epochs}")
+        self.writer.add_text(self.model_type, f"Nb of epochs : {self.epochs}")
 
     def train(self, train_set, test_set=None):
         # Setting hyperparameters
         self.input_dim = train_set[0][0].shape[1]
         self.output_dim = 1
         self.batch_size = 128
+
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True,
                                                    drop_last=True)
         train_labels = [x.detach().numpy()[0] for x in list(list(zip(*train_set))[1])]
+        self.writer.add_text(self.model_type, f"Nb of inputs : {self.input_dim}")
+        self.writer.add_text(self.model_type, f"Nb of Outputs : {self.output_dim}")
+        self.writer.add_text(self.model_type, f"Batch Size : {self.batch_size}")
 
         if test_set is not None:
             test_loader = torch.utils.data.DataLoader(test_set, batch_size=len(test_set))

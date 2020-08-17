@@ -4,7 +4,6 @@
 ## The learning goal is to learn and practice on :
 - Pytorch
 - RNN (LSTM, GRU...)
-- Graph construction
 - Web app integration and result visualization (Plotly Dash or Streamlit ?)
 
 
@@ -18,7 +17,6 @@
 ## How to use it
 
 Paragraph under construction
-
 
 
 ###Steps : 
@@ -50,7 +48,6 @@ Paragraph under construction
 * Save and reload models to gain time
 * Add other date info for information (holiday, christmas, or even raw day/month) ?
 * Try ARIMA
-* Web Scrapping input 
 
 ### Launch Tensorboard on Windows
 >.\venv\Scripts\python.exe .\venv\Lib\site-packages\tensorboard\main.py --logdir=runs
