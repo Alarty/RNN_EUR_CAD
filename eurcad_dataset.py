@@ -1,6 +1,7 @@
 import requests
 import os.path
 import datetime
+from sklearn.preprocessing import MinMaxScaler
 
 import pandas as pd
 import numpy as np
@@ -28,12 +29,17 @@ class DatasetHandler:
             self.data = self.load_csv(self.filename)
         else:
             self.data = self.load_online()
-        self.data = self.data.dropna()
+        self.data = self.data.fillna(method='ffill')
         self.data = self.data.reset_index(drop=True)
-        self.data['daily_change'] = self.to_daily_var(self.data[target_value])
+        # self.data['daily_change'] = self.to_daily_var(self.data[target_value])
+        # # increase the daily change to avoid it to be under 1, for MSE root square
+        # self.data['daily_change'] = self.data['daily_change'] * 1000
         self.add_weekday()
         # round precision of daily change and eur_cad_rate
         self.data.round(self.round_floats)
+
+
+        self.data_scaler = None
 
     def get_dataset(self):
         return self.data
@@ -41,6 +47,17 @@ class DatasetHandler:
     def get_features(self, features_list):
         print(f"Select features : {features_list}")
         return self.data[features_list]
+
+    def normalize(self, data, margin=0.10):
+        if self.data_scaler is None:
+            self.data_scaler = MinMaxScaler()
+            max_marg = data.max() * (1 + margin)
+            min_marg = data.min() * (1 - margin)
+            data_with_margin = data.append(min_marg, ignore_index=True)
+            data_with_margin = data_with_margin.append(max_marg, ignore_index=True)
+            self.data_scaler.fit(data_with_margin)
+        return self.data_scaler.transform(data)
+
 
     def trunc_period(self, date_begin: str, date_end: str):
         """
@@ -53,7 +70,7 @@ class DatasetHandler:
         self.data = self.data[date_begin <= self.data.Date]
         self.data = self.data[self.data.Date <= date_end]
 
-    def create_sequence(self, winsize: int):
+    def create_sequence(self, winsize: int, target_str: str):
         """
         add features for each element : the N previous values
         :param winsize: the size of the "memory" or sliding window. The number of precedent n features to guess the next
@@ -61,9 +78,9 @@ class DatasetHandler:
         """
         self.data_winsize = winsize
         for win_i in range(1, winsize + 1):
-            self.data['f' + str(win_i)] = list(np.zeros(win_i)) + [self.data["daily_change"].values[i - win_i]
+            self.data['f' + str(win_i)] = list(np.zeros(win_i)) + [self.data[target_str].values[i - win_i]
                                                                    for i in
-                                                                   range(win_i, len(self.data["daily_change"].values))]
+                                                                   range(win_i, len(self.data[target_str].values))]
         # remove the n first occurences because there is some zeros that are artificials
         self.data = self.data[winsize:]
 
@@ -86,21 +103,20 @@ class DatasetHandler:
 
         return train, test
 
-    def data_augment(self, times: int, noise_lvl: float):
+    @staticmethod
+    def df_augment(dataset, times: int, noise_lvl: float):
         """
         Augment dataset with little noise
+        :param dataset: the list of features to augment
         :param times: how many times we augment
         :param noise_lvl: the level of the noise
         """
-        for dataset in [self.train, self.test]:
 
-            dataset = pd.concat([dataset] * times, ignore_index=True)
-            random_seq = np.random.normal(0, noise_lvl, len(dataset))
-            dataset.daily_change += random_seq
-            for feat_num in range(0, self.data_winsize):
-                random_seq = np.random.normal(0, noise_lvl, len(dataset))
-                dataset["f" + str(feat_num + 1)] += random_seq
-        self.data.round(self.round_floats)
+        aug_dataset = pd.DataFrame(dataset * times)
+        aug_dataset = aug_dataset + np.random.normal(0, noise_lvl, aug_dataset.shape)
+        aug_dataset = aug_dataset.values.tolist()
+        aug_dataset.extend(dataset)
+        return aug_dataset
 
     def add_weekday(self):
         self.data['weekday'] = self.data.Date.dt.dayofweek
@@ -134,8 +150,8 @@ class DatasetHandler:
         :param data: the input pd serie
         :return: a new pd serie containing only the difference
         """
-        return pd.Series([0] + [data[i] - data[i - 1] for i in range(1, len(data))])
-
+        array = pd.Series([0] + [data[i] - data[i - 1]  for i in range(1, len(data))])
+        return array
     @staticmethod
     def to_tensor(features, target=None):
         """

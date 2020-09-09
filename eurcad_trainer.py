@@ -3,42 +3,54 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+from statsmodels.tsa.arima_model import ARIMA
 
 import eurcad_model as models
 
 
 class Trainer:
 
-    def __init__(self, model_type="GRU", model_params={}, logdir="rnn_eur_cad"):
+    def __init__(self, is_nn=True, model_type="GRU", model_params={}, writer=None):
         if len(model_params) == 0:
             model_params = {"learn_rate": 0.00005, "hidden_dim": 256, "hidden_nb": 1, "epochs": 200}
-
-        self.learn_rate = model_params["learn_rate"]
-        self.hidden_dim = model_params["hidden_dim"]
-        self.hidden_nb = model_params["hidden_nb"]
-        self.epochs = model_params["epochs"]
+        self.is_nn = is_nn
         self.model_type = model_type
         self.model = None
-        self.input_dim = None
-        self.output_dim = None
-        self.batch_size = None
-        self.optimizer = None
-        self.loss_function = None
 
-        is_cuda = torch.cuda.is_available()
-        if is_cuda:
-            self.device = torch.device("cuda")
-        else:
-            self.device = torch.device("cpu")
+        if self.is_nn:
+            self.learn_rate = model_params["learn_rate"]
+            self.hidden_dim = model_params["hidden_dim"]
+            self.hidden_nb = model_params["hidden_nb"]
+            self.epochs = model_params["epochs"]
+            self.input_dim = None
+            self.output_dim = None
+            self.batch_size = None
+            self.optimizer = None
+            self.loss_function = None
 
-        # create Tensorboard run and write the parameters of the run
-        self.writer = SummaryWriter(f'runs/{logdir}')
+            is_cuda = torch.cuda.is_available()
+            if is_cuda:
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
+
+        self.writer = writer
+        if writer is None:
+            self.writer = SummaryWriter(f'runs/{model_type}_data')
         self.writer.add_text(self.model_type, f"Learning Rate : {self.learn_rate}")
         self.writer.add_text(self.model_type, f"Size of Hidden layer : {self.hidden_dim}")
         self.writer.add_text(self.model_type, f"Nb of Hidden layer : {self.hidden_nb}")
         self.writer.add_text(self.model_type, f"Nb of epochs : {self.epochs}")
 
     def train(self, train_set, test_set=None):
+
+        if self.is_nn:
+            self.train_nn(train_set, test_set)
+        else:
+            self.train_arima(train_set, test_set)
+
+    def train_nn(self, train_set, test_set=None):
+
         # Setting hyperparameters
         self.input_dim = train_set[0][0].shape[1]
         self.output_dim = 1
@@ -65,12 +77,11 @@ class Trainer:
         self.model.to(self.device)
 
         # set up model graph to tensorboard
-        self.writer.add_graph(self.model, (torch.rand(1, 1, self.input_dim), torch.rand(1, 1, self.hidden_dim)))
+        # self.writer.add_graph(self.model, (torch.rand(1, 1, self.input_dim), torch.rand(1, 1, self.hidden_dim)))
 
         # Choose loss, optimizer and metric
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
         self.loss_function = nn.MSELoss()
-
 
         # Notify network layers behaviour we are in test mode (batchnorm, dropout...)
         self.model.train()
@@ -112,9 +123,12 @@ class Trainer:
                 self.writer.add_scalar('Train loss', loss, nb_loss)
                 if test_set is not None:
                     test_preds, test_loss = self.evaluate(test_loader)
-
-                    self.writer.add_scalar('Test loss', test_loss, nb_loss)
+                    # Log the loss into tensorboard
+                    self.writer.add_scalars('Losses', {"train": loss, "test": test_loss}, nb_loss)
                     avg_test_loss += test_loss
+                else:
+                    # Log the loss into tensorboard
+                    self.writer.add_scalar('Train loss', loss, nb_loss)
                 nb_loss += 1
                 if counter % 100 == 0:
                     print(

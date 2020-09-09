@@ -14,7 +14,6 @@ def plot_raw(date, feature, title=""):
 
 
 def plot_difference(test_preds, test_labels, title=""):
-    assert len(test_preds) == len(test_labels)
     plt.title(title)
     plt.plot(range(0, len(test_preds)), test_preds)
     plt.plot(range(0, len(test_labels)), test_labels)

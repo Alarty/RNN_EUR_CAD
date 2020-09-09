@@ -6,20 +6,7 @@
 - RNN (LSTM, GRU...)
 - Web app integration and result visualization (Plotly Dash or Streamlit ?)
 
-
-### Things to try :
-- Fixed rolling windows
-- LSTM
-- GRU
-- Data augmentation with very small noise 
-
-
-## How to use it
-
-Paragraph under construction
-
-
-###Steps : 
+###Steps of the scripts: 
 - Data Gathering
     - Web Scrapping with BeautifulSoup or a CSV file
 - Data Preparation
@@ -41,13 +28,15 @@ Paragraph under construction
     - Gather results
 
 ### To do list (sorted by priority) :
-* Try different starting time
-* Try a longer full LSTM sequence ? (not only the N last to guess the next)
-* Create bunch of viz un tensorboard for data viz + model results viz and compare
+* use as input open/close/min/max of previous days instead of only close ?
+* Verify LSTM implement issue ?
+* StandardScaler on train set ? to 
+* Data Augment with noise
 * Tweak model parameters
 * Save and reload models to gain time
-* Add other date info for information (holiday, christmas, or even raw day/month) ?
-* Try ARIMA
+* Add other date info as features post-RNN (holiday, christmas, or even raw day/month) ?
+* Try ARIMA and facebook prophet
 
 ### Launch Tensorboard on Windows
->.\venv\Scripts\python.exe .\venv\Lib\site-packages\tensorboard\main.py --logdir=runs
+> .\venv\Scripts\python.exe .\venv\Lib\site-packages\tensorboard\main.py --logdir=runs
+

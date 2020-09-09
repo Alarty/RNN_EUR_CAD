@@ -48,3 +48,22 @@
     - Symmetric MAPE
     - Has both a lower bound and an upper bound
     - Not symmetric between under and over forecasting (Bad for our case)
+
+
+Moving average and great LSTM conclusion : https://medium.com/neuronio/predicting-stock-prices-with-lstm-349f5a0974d4
+
+https://towardsdatascience.com/training-neural-networks-for-price-prediction-with-tensorflow-8aafe0c55198
+
+- Standarize your data to make training more efficient
+- Use RELU activation function for all hidden layers — you will be going nowhere with default sigmoid activation
+- Use Linear activation function for the single-neuron output layer
+
+Another important task is selecting the loss function.
+Mean Squared Error or Mean Absolute Error are the two most common choices.
+As my goal to minimize the average percentage error and maximize the share of all buildings within 5% error I choose MAE,
+as it penalizes outliers less and is easier to interpret — it pretty much tells you how many $$/m2 on average each offer is off the actual value.
+
+## ARIMA
+
+https://medium.com/@pratikkgandhi/7-statistical-tests-to-validate-and-help-to-fit-arima-model-33c5853e2e93
+
